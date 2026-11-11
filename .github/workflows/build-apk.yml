@@ -2,6 +2,13 @@ name: Build Data Guard APK
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '**/*.zip'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -11,42 +18,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
       - name: Extract project
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -iname '*.zip' -print -quit)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ZIP file not found"
-            exit 1
-          fi
-          mkdir extracted
-          unzip -q "$ZIP_FILE" -d extracted
+          unzip -q DataGuard-Project-Source.zip -d extracted
+          find extracted -name settings.gradle.kts
 
       - name: Build APK
         run: |
-          GRADLEW=$(find extracted -name gradlew -type f -print -quit)
-          if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found in ZIP"
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$GRADLEW")
-          cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug
-          APK=$(find . -path '*/build/outputs/apk/debug/*.apk' -print -quit)
-          if [ -z "$APK" ]; then
-            echo "APK not found"
-            exit 1
-          fi
-          cp "$APK" "$GITHUB_WORKSPACE/DataGuard.apk"
+          cd extracted
+          PROJECT=$(find . -name settings.gradle.kts -printf '%h\n' | head -1)
+          cd "$PROJECT"
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: DataGuard-APK
-          path: DataGuard.apk
+          path: extracted/**/build/outputs/apk/debug/*.apk
