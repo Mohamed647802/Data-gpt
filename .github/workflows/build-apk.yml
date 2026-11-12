@@ -32,12 +32,40 @@ jobs:
       - name: Extract project
         run: |
           unzip -q DataGuard-Project-Source.zip -d extracted
-          find extracted -name settings.gradle.kts
+
+      - name: Fix Java Kotlin compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          files = list(Path("extracted").rglob("app/build.gradle.kts"))
+          if not files:
+              raise SystemExit("app/build.gradle.kts not found")
+
+          p = files[0]
+          s = p.read_text()
+
+          marker = "android {"
+          addition = """android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          """
+
+          if "jvmTarget" not in s:
+              s = s.replace(marker, addition, 1)
+
+          p.write_text(s)
+          print("Fixed:", p)
+          PY
 
       - name: Build APK
         run: |
-          cd extracted
-          PROJECT=$(find . -name settings.gradle.kts -printf '%h\n' | head -1)
+          PROJECT=$(find extracted -name settings.gradle.kts -printf '%h\n' | head -1)
           cd "$PROJECT"
           gradle assembleDebug
 
